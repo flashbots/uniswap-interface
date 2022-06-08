@@ -84,7 +84,7 @@ export default function useSendSwapMessage(
             name: 'SonOfASwap',
             version: '1',
             chainId: chainId.toString(),
-            verifyingContract: VERIFYING_CONTRACT_EIP712,
+            verifyingContract: VERIFYING_CONTRACT_EIP712[chainId],
           },
           primaryType: 'SwapOrder',
           message: {
