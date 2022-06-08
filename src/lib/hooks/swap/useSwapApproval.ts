@@ -72,13 +72,13 @@ export default function useSwapApproval(
   useIsPendingApproval: (token?: Token, spender?: string) => boolean,
   amount?: CurrencyAmount<Currency> // defaults to trade.maximumAmountIn(allowedSlippage)
 ) {
+  const { chainId } = useActiveWeb3React()
   const amountToApprove = useMemo(
     () => amount || (trade && trade.inputAmount.currency.isToken ? trade.maximumAmountIn(allowedSlippage) : undefined),
     [amount, trade, allowedSlippage]
   )
-  // const spender = useSwapRouterAddress(trade)
-  const spender = VERIFYING_CONTRACT_EIP712
-
+  // allow verifyAndSend contract to access tokens
+  const spender = VERIFYING_CONTRACT_EIP712[chainId || 0]
   const approval = useApproval(amountToApprove, spender, useIsPendingApproval)
   return approval
 }

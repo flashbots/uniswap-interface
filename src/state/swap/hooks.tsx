@@ -1,5 +1,6 @@
 import { Trans } from '@lingui/macro'
 import { Currency, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core'
+import { WETH_ADDRESSES } from 'constants/addresses'
 import useActiveWeb3React from 'hooks/useActiveWeb3React'
 import useAutoSlippageTolerance from 'hooks/useAutoSlippageTolerance'
 import { useBestTrade } from 'hooks/useBestTrade'
@@ -87,7 +88,7 @@ export function useDerivedSwapInfo(): {
   }
   allowedSlippage: Percent
 } {
-  const { account } = useActiveWeb3React()
+  const { account, chainId } = useActiveWeb3React()
 
   const {
     independentField,
@@ -97,8 +98,10 @@ export function useDerivedSwapInfo(): {
     recipient,
   } = useSwapState()
 
-  const inputCurrency = useCurrency(inputCurrencyId)
-  const outputCurrency = useCurrency(outputCurrencyId)
+  // use WETH, never ETH
+  const ethToWeth = (currencyId?: string | null) => (currencyId === 'ETH' ? WETH_ADDRESSES[chainId || 1] : currencyId)
+  const inputCurrency = useCurrency(ethToWeth(inputCurrencyId))
+  const outputCurrency = useCurrency(ethToWeth(outputCurrencyId))
   const recipientLookup = useENS(recipient ?? undefined)
   const to: string | null = (recipient === null ? account : recipientLookup.address) ?? null
 
