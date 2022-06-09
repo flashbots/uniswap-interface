@@ -50,7 +50,6 @@ export function useSwapCallback(
     callback: libCallback,
     error,
   } = useLibSwapCallBack({ trade, allowedSlippage, recipientAddressOrName: recipient, signatureData, deadline })
-
   const callback: null | (() => Promise<string | null>) = useMemo(() => {
     let pendingTxHash: string
     if (!libCallback || !trade) {
@@ -59,24 +58,6 @@ export function useSwapCallback(
     return () =>
       libCallback().then(async (response) => {
         if (library) {
-          // console.log('[hooks/useSwapCallback] library', library)
-          // console.log('[hooks/useSwapCallback] signature', response)
-          // TODO: send signed message to backend, get tx hash
-          // const fakeTxResponse = {
-          //   hash,
-          //   confirmations: 0,
-          //   from: '0x0000000000092DD1482686a414A08e64fF1463C2',
-          //   wait: async () => {
-          //     return await library.getTransactionReceipt(hash)
-          //   },
-          //   nonce: 420,
-          //   gasLimit: BigNumber.from(420000),
-          //   data: '0x0',
-          //   value: BigNumber.from(0),
-          //   chainId: 5,
-          // }
-          console.log('***SIGNATURE', response.signature)
-
           const signedMessageRequest: SignedMessageRequest = {
             trade_signature: response.signature,
             data: response.message,
@@ -84,7 +65,7 @@ export function useSwapCallback(
           }
 
           const USE_POC = true
-          let data: any
+          let data: SentMessageResponse
           if (USE_POC) {
             console.log('* Using PoC backend')
             data = (await axios.post('http://localhost:8080/uniswap', signedMessageRequest)).data

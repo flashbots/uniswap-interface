@@ -37,19 +37,6 @@ export default function ConfirmSwapModal({
   swapErrorMessage: ReactNode | undefined
   onDismiss: () => void
 }) {
-  console.log('[ConfirmSwapModal]', {
-    trade,
-    originalTrade,
-    onAcceptChanges,
-    allowedSlippage,
-    onConfirm,
-    onDismiss,
-    recipient,
-    swapErrorMessage,
-    isOpen,
-    attemptingTxn,
-    txHash,
-  })
   const showAcceptChanges = useMemo(
     () => Boolean(trade && originalTrade && tradeMeaningfullyDiffers(trade, originalTrade)),
     [originalTrade, trade]

@@ -30,14 +30,10 @@ function useSwapApprovalStates(
     [trade, allowedSlippage]
   )
 
-  const v2RouterAddress = chainId ? V2_ROUTER_ADDRESS[chainId] : undefined
-  const v3RouterAddress = chainId ? V3_ROUTER_ADDRESS[chainId] : undefined
-  const swapRouterAddress = chainId ? SWAP_ROUTER_ADDRESSES[chainId] : undefined
-  const v2 = useApprovalStateForSpender(amountToApprove, v2RouterAddress, useIsPendingApproval)
-  const v3 = useApprovalStateForSpender(amountToApprove, v3RouterAddress, useIsPendingApproval)
-  const v2V3 = useApprovalStateForSpender(amountToApprove, swapRouterAddress, useIsPendingApproval)
+  const verifyAndExecuteAddress = chainId ? VERIFYING_CONTRACT_EIP712[chainId] : undefined
+  const approvalState = useApprovalStateForSpender(amountToApprove, verifyAndExecuteAddress, useIsPendingApproval)
 
-  return useMemo(() => ({ v2, v3, v2V3 }), [v2, v2V3, v3])
+  return useMemo(() => ({ v2: approvalState, v3: approvalState, v2V3: approvalState }), [approvalState])
 }
 
 export function useSwapRouterAddress(
@@ -95,6 +91,7 @@ export function useSwapApprovalOptimizedTrade(
   const onlyV2Routes = trade?.routes.every((route) => route.protocol === Protocol.V2)
   const onlyV3Routes = trade?.routes.every((route) => route.protocol === Protocol.V3)
   const tradeHasSplits = (trade?.routes.length ?? 0) > 1
+  tradeHasSplits && console.error("TRADE HAS SPLITS! We don't support this...")
 
   const approvalStates = useSwapApprovalStates(trade, allowedSlippage, useIsPendingApproval)
 

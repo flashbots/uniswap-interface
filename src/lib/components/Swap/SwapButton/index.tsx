@@ -27,6 +27,7 @@ interface SwapButtonProps {
   disabled?: boolean
 }
 
+// TODO: can we delete this?
 export default memo(function SwapButton({ disabled }: SwapButtonProps) {
   const { account, chainId, library } = useActiveWeb3React()
   const {
@@ -106,6 +107,7 @@ export default memo(function SwapButton({ disabled }: SwapButtonProps) {
 
   const onSwap = useCallback(async () => {
     console.log('you are in [SwapButton]')
+    console.error('THIS COMPONENT SHOULD NOT BE USED... //TODO: CAN WE DELETE THIS?')
     try {
       const transaction = await swapCallback?.()
       if (!transaction) {
@@ -115,17 +117,19 @@ export default memo(function SwapButton({ disabled }: SwapButtonProps) {
         console.log('[SwapButton] transaction exists!!!')
       }
       invariant(trade.trade)
-      const hash = "0xb97dbb9dd039be24820663a1ad9c149f03cc8c03b1e2fd3785fb57c0db115d75"
+      const hash = '0xb97dbb9dd039be24820663a1ad9c149f03cc8c03b1e2fd3785fb57c0db115d75'
       if (library) {
-        console.log("library", library)
+        console.log('library', library)
         const fakeTxResponse = {
           hash,
           confirmations: 0,
-          from: "0x0000000000092DD1482686a414A08e64fF1463C2",
-          wait: async () => {return await library.getTransactionReceipt(hash)},
+          from: '0x0000000000092DD1482686a414A08e64fF1463C2',
+          wait: async () => {
+            return await library.getTransactionReceipt(hash)
+          },
           nonce: 420,
           gasLimit: BigNumber.from(420000),
-          data: "0x0",
+          data: '0x0',
           value: BigNumber.from(0),
           chainId: 5,
         }
@@ -145,7 +149,7 @@ export default memo(function SwapButton({ disabled }: SwapButtonProps) {
           setOldestValidBlock(receipt.blockNumber)
         })
       } else {
-        console.log("NO LIBRARY")
+        console.log('NO LIBRARY')
       }
 
       // Only reset open after any queued animations to avoid layout thrashing, because a

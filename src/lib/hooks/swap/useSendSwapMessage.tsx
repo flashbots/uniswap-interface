@@ -1,16 +1,11 @@
 import { BigNumber } from '@ethersproject/bignumber'
 import { JsonRpcProvider } from '@ethersproject/providers'
-// eslint-disable-next-line no-restricted-imports
-// import { t, Trans } from '@lingui/macro'
 import { Trade } from '@uniswap/router-sdk'
 import { Currency, TradeType } from '@uniswap/sdk-core'
 import { Trade as V2Trade } from '@uniswap/v2-sdk'
 import { Trade as V3Trade } from '@uniswap/v3-sdk'
 import { VERIFYING_CONTRACT_EIP712 } from 'constants/addresses'
 import { useMemo } from 'react'
-// import { calculateGasMargin } from 'utils/calculateGasMargin'
-// import isZero from 'utils/isZero'
-// import { swapErrorToUserReadableMessage } from 'utils/swapErrorToUserReadableMessage'
 
 type AnyTrade =
   | V2Trade<Currency, Currency, TradeType>
@@ -56,10 +51,7 @@ export default function useSendSwapMessage(
     }
     return {
       callback: async function onSwap(): Promise<SignedMessageResponse> {
-        console.log('[useSendSwapMessage] swapMessages', swapMessages)
-
         const message = swapMessages[0] // TODO: use array appropriately or remove it
-
         const messagePayload = {
           types: {
             EIP712Domain: [
@@ -104,7 +96,6 @@ export default function useSendSwapMessage(
           await library.getSigner().getAddress(),
           JSON.stringify(messagePayload),
         ])
-        console.log('***signatureRes', signatureRes)
         return {
           signature: signatureRes,
           message: messagePayload,

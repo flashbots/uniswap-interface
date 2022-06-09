@@ -44,7 +44,6 @@ export function useSwapCallback({
   feeOptions,
 }: UseSwapCallbackArgs): UseSwapCallbackReturns {
   const { account, chainId, library } = useActiveWeb3React()
-
   const swapMessages = useSwapMessageArguments(
     trade,
     allowedSlippage,
@@ -72,7 +71,9 @@ export function useSwapCallback({
 
     return {
       state: SwapCallbackState.VALID,
-      callback: async () => callback(),
+      callback: async () => {
+        return callback()
+      },
     }
   }, [trade, library, account, chainId, callback, recipient, recipientAddressOrName])
 }

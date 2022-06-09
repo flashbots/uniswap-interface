@@ -1,16 +1,16 @@
 import { BigNumber } from '@ethersproject/bignumber'
-import { Trade } from '@uniswap/router-sdk'
-import { Currency, CurrencyAmount, Percent, TradeType } from '@uniswap/sdk-core'
-import { Router as V2SwapRouter, Trade as V2Trade } from '@uniswap/v2-sdk'
+import { RouteV2, RouteV3, Trade } from '@uniswap/router-sdk'
+import { Currency, Percent, TradeType } from '@uniswap/sdk-core'
+// import { Router as V2SwapRouter, Trade as V2Trade } from '@uniswap/v2-sdk'
+import { Trade as V2Trade } from '@uniswap/v2-sdk'
 import { FeeOptions, Trade as V3Trade } from '@uniswap/v3-sdk'
-// import { SWAP_ROUTER_ADDRESSES, V3_ROUTER_ADDRESS } from 'constants/addresses'
-import { V3_ROUTER_ADDRESS } from 'constants/addresses'
 import useActiveWeb3React from 'hooks/useActiveWeb3React'
 import { SwapMessage } from 'lib/hooks/swap/useSendSwapMessage'
+import { useSwapRouterAddress } from 'lib/hooks/swap/useSwapApproval'
 import { useMemo } from 'react'
 
-import { useArgentWalletContract } from './useArgentWalletContract'
-import { useV2RouterContract } from './useContract'
+// import { useArgentWalletContract } from './useArgentWalletContract'
+// import { useV2RouterContract } from './useContract'
 import useENS from './useENS'
 import { SignatureData } from './useERC20Permit'
 
@@ -19,12 +19,6 @@ export type AnyTrade =
   | V3Trade<Currency, Currency, TradeType>
   | Trade<Currency, Currency, TradeType>
 
-function toHex(currencyAmount: CurrencyAmount<Currency>) {
-  return `0x${currencyAmount.quotient.toString(16)}`
-}
-
-const ZERO_HEX = '0x0'
-
 interface MessageParams {
   tradeType: string
   path: string[]
@@ -32,21 +26,36 @@ interface MessageParams {
   amountOut: BigNumber
 }
 
+enum RouterVersion {
+  V2 = 2,
+  V3 = 3,
+}
+
 /**
  * Produces the on-chain method name to call and the hex encoded parameters to pass as arguments for a given trade.
  * @param trade to produce call parameters for
  * @param options options for the call parameters
  */
-function swapMessageParametersV3(trade: AnyTrade): MessageParams {
+function swapMessageParameters(trade: AnyTrade): MessageParams {
   let path: string[] = []
-  let singleHop = true
+  let singleHop = true // TODO: are my `singleHop` interpretations correct?
+  let routerVersion: RouterVersion
   if (trade instanceof V3Trade) {
     path = trade.swaps[0].route.tokenPath.map((p) => p.address)
     singleHop = trade.swaps[0].route.pools.length === 1
+    routerVersion = RouterVersion.V3
   } else if (trade instanceof V2Trade) {
     path = trade.route.path.map((p) => p.address)
+    routerVersion = RouterVersion.V2
   } else {
+    singleHop = trade.swaps[0].route.pools.length === 1
     path = trade.swaps[0].route.path.map((p) => p.address)
+    routerVersion = trade.routes.every((route) => route instanceof RouteV3)
+      ? RouterVersion.V3
+      : trade.routes.every((route) => route instanceof RouteV2)
+      ? RouterVersion.V2
+      : RouterVersion.V3 // default to V3 if there is a mix of routes
+    // TODO: allow split (V2+v3) purchases
   }
 
   const amountIn = BigNumber.from(trade.inputAmount.numerator.toString()).div(
@@ -57,17 +66,25 @@ function swapMessageParametersV3(trade: AnyTrade): MessageParams {
   )
 
   let tradeType: string
-  if (singleHop) {
-    if (trade.tradeType === TradeType.EXACT_INPUT) {
-      tradeType = 'v3_exactInputSingle'
+  if (routerVersion === RouterVersion.V3) {
+    if (singleHop) {
+      if (trade.tradeType === TradeType.EXACT_INPUT) {
+        tradeType = 'v3_exactInputSingle'
+      } else {
+        tradeType = 'v3_exactOutputSingle'
+      }
     } else {
-      tradeType = 'v3_exactOutputSingle'
+      if (trade.tradeType === TradeType.EXACT_INPUT) {
+        tradeType = 'v3_exactInput'
+      } else {
+        tradeType = 'v3_exactOutput'
+      }
     }
   } else {
     if (trade.tradeType === TradeType.EXACT_INPUT) {
-      tradeType = 'v3_exactInput'
+      tradeType = 'v2_swapExactTokensForTokens'
     } else {
-      tradeType = 'v3_exactOutput'
+      tradeType = 'v2_swapTokensForExactTokens'
     }
   }
   return {
@@ -78,12 +95,6 @@ function swapMessageParametersV3(trade: AnyTrade): MessageParams {
   }
 }
 
-// interface SwapCall {
-//   address: string
-//   calldata: string
-//   value: string
-// }
-
 /**
  * Returns the swap calls that can be used to make the trade
  * @param trade trade to execute
@@ -93,191 +104,105 @@ function swapMessageParametersV3(trade: AnyTrade): MessageParams {
  */
 export function useSwapMessageArguments(
   trade: AnyTrade | undefined,
-  allowedSlippage: Percent,
+  _allowedSlippage: Percent,
   recipientAddressOrName: string | null | undefined,
-  signatureData: SignatureData | null | undefined,
+  _signatureData: SignatureData | null | undefined,
   deadline: BigNumber | undefined,
-  feeOptions: FeeOptions | undefined
+  _feeOptions: FeeOptions | undefined
 ): SwapMessage[] {
   const { account, chainId, library } = useActiveWeb3React()
 
   const { address: recipientAddress } = useENS(recipientAddressOrName)
   const recipient = recipientAddressOrName === null ? account : recipientAddress
-  const routerContract = useV2RouterContract()
-  const argentWalletContract = useArgentWalletContract()
+  // const routerContract = useV2RouterContract()
+  // const argentWalletContract = useArgentWalletContract()
+  const swapRouterAddress = useSwapRouterAddress(trade)
 
   return useMemo(() => {
-    if (!trade || !recipient || !library || !account || !chainId || !deadline) return []
+    if (!trade || !recipient || !library || !account || !chainId || !deadline || !swapRouterAddress) return []
+    const messageParams = swapMessageParameters(trade)
 
-    if (trade instanceof V2Trade) {
-      if (!routerContract) return []
-      const swapMethods = []
-
-      swapMethods.push(
-        V2SwapRouter.swapCallParameters(trade, {
-          feeOnTransfer: false,
-          allowedSlippage,
-          recipient,
-          deadline: deadline.toNumber(),
-        })
-      )
-
-      if (trade.tradeType === TradeType.EXACT_INPUT) {
-        swapMethods.push(
-          V2SwapRouter.swapCallParameters(trade, {
-            feeOnTransfer: true,
-            allowedSlippage,
-            recipient,
-            deadline: deadline.toNumber(),
-          })
-        )
-      }
-
-      return swapMethods.map(({ methodName, args, value }) => {
-        // SwapMessage
-        const swap: SwapMessage = {
-          router: routerContract.address,
-          amountIn: BigNumber.from(trade.inputAmount),
-          amountOut: BigNumber.from(trade.outputAmount),
-          tradeType: `v2_${methodName}`, // TODO: enum?
-          recipient,
-          path: trade.route.path.map((p) => p.address),
-          deadline: deadline.toNumber(),
-          sqrtPriceLimitX96: BigNumber.from(0),
-          fee: 0,
-        }
-        return swap
-      })
-      // ignore Argent for now
-      // ====================================================================================
-
-      // return swapMethods.map(({ methodName, args, value }) => {
-      //   if (argentWalletContract && trade.inputAmount.currency.isToken) {
-      //     return {
-      //       address: argentWalletContract.address,
-      //       calldata: argentWalletContract.interface.encodeFunctionData('wc_multiCall', [
-      //         [
-      //           approveAmountCalldata(trade.maximumAmountIn(allowedSlippage), routerContract.address),
-      //           {
-      //             to: routerContract.address,
-      //             value,
-      //             data: routerContract.interface.encodeFunctionData(methodName, args),
-      //           },
-      //         ],
-      //       ]),
-      //       value: '0x0',
-      //     }
-      //   } else {
-      //     return {
-      //       address: routerContract.address,
-      //       calldata: routerContract.interface.encodeFunctionData(methodName, args),
-      //       value,
-      //     }
-      //   }
-      // })
-    } else {
-      // swap options shared by v3 and v2+v3 swap routers
-      // const sharedSwapOptions = {
-      //   fee: feeOptions,
-      //   recipient,
-      //   slippageTolerance: allowedSlippage,
-      //   ...(signatureData
-      //     ? {
-      //         inputTokenPermit:
-      //           'allowed' in signatureData
-      //             ? {
-      //                 expiry: signatureData.deadline,
-      //                 nonce: signatureData.nonce,
-      //                 s: signatureData.s,
-      //                 r: signatureData.r,
-      //                 v: signatureData.v as any,
-      //               }
-      //             : {
-      //                 deadline: signatureData.deadline,
-      //                 amount: signatureData.amount,
-      //                 s: signatureData.s,
-      //                 r: signatureData.r,
-      //                 v: signatureData.v as any,
-      //               },
-      //       }
-      //     : {}),
-      // }
-
-      // const swapRouterAddress = chainId
-      //   ? trade instanceof V3Trade
-      //     ? V3_ROUTER_ADDRESS[chainId]
-      //     : SWAP_ROUTER_ADDRESSES[chainId]
-      //   : undefined
-      // TODO: can we use SWAP_ROUTER_ADDRESS?
-      const swapRouterAddress = chainId ? V3_ROUTER_ADDRESS[chainId] : undefined
-      if (!swapRouterAddress) return []
-
-      // const { value, calldata } =
-      //   trade instanceof V3Trade
-      //     ? V3SwapRouter.swapCallParameters(trade, {
-      //         ...sharedSwapOptions,
-      //         deadline: deadline.toString(),
-      //       })
-      //     : SwapRouter.swapCallParameters(trade, {
-      //         ...sharedSwapOptions,
-      //         deadlineOrPreviousBlockhash: deadline.toString(),
-      //       })
-
-      const messageParams = swapMessageParametersV3(trade)
-      console.log('V3 message params', messageParams)
-
-      const swap: SwapMessage = {
-        router: swapRouterAddress,
-        amountIn: messageParams.amountIn,
-        amountOut: messageParams.amountOut,
-        tradeType: messageParams.tradeType, // TODO: enum?
-        recipient,
-        path: messageParams.path,
-        deadline: deadline.toNumber(),
-        sqrtPriceLimitX96: BigNumber.from(0), // TODO: get real value for this
-        fee: 3000, // TODO: get real value for this
-      }
-      console.log('*swap', swap)
-      return [swap]
-      // ====================================================================================
-
-      // if (argentWalletContract && trade.inputAmount.currency.isToken) {
-      //   return [
-      //     {
-      //       address: argentWalletContract.address,
-      //       calldata: argentWalletContract.interface.encodeFunctionData('wc_multiCall', [
-      //         [
-      //           approveAmountCalldata(trade.maximumAmountIn(allowedSlippage), swapRouterAddress),
-      //           {
-      //             to: swapRouterAddress,
-      //             value,
-      //             data: calldata,
-      //           },
-      //         ],
-      //       ]),
-      //       value: '0x0',
-      //     },
-      //   ]
-      // }
-      // return [
-      //   {
-      //     address: swapRouterAddress,
-      //     calldata,
-      //     value,
-      //   },
-      // ]
+    const swap: SwapMessage = {
+      router: swapRouterAddress,
+      amountIn: messageParams.amountIn,
+      amountOut: messageParams.amountOut,
+      tradeType: messageParams.tradeType, // TODO: enum?
+      recipient,
+      path: messageParams.path,
+      deadline: deadline.toNumber(),
+      sqrtPriceLimitX96: BigNumber.from(0), // TODO: get real value for this
+      fee: 3000, // TODO: get real value for this
     }
+    return [swap]
+
+    /* punt Argent impl for now */
+    // V2 Argent stuff
+    // ====================================================================================
+    //   // return swapMethods.map(({ methodName, args, value }) => {
+    //   //   if (argentWalletContract && trade.inputAmount.currency.isToken) {
+    //   //     return {
+    //   //       address: argentWalletContract.address,
+    //   //       calldata: argentWalletContract.interface.encodeFunctionData('wc_multiCall', [
+    //   //         [
+    //   //           approveAmountCalldata(trade.maximumAmountIn(allowedSlippage), routerContract.address),
+    //   //           {
+    //   //             to: routerContract.address,
+    //   //             value,
+    //   //             data: routerContract.interface.encodeFunctionData(methodName, args),
+    //   //           },
+    //   //         ],
+    //   //       ]),
+    //   //       value: '0x0',
+    //   //     }
+    //   //   } else {
+    //   //     return {
+    //   //       address: routerContract.address,
+    //   //       calldata: routerContract.interface.encodeFunctionData(methodName, args),
+    //   //       value,
+    //   //     }
+    //   //   }
+    //   // })
+    // } else {
+    // V3 Argent stuff
+    //   // ====================================================================================
+    //   // if (argentWalletContract && trade.inputAmount.currency.isToken) {
+    //   //   return [
+    //   //     {
+    //   //       address: argentWalletContract.address,
+    //   //       calldata: argentWalletContract.interface.encodeFunctionData('wc_multiCall', [
+    //   //         [
+    //   //           approveAmountCalldata(trade.maximumAmountIn(allowedSlippage), swapRouterAddress),
+    //   //           {
+    //   //             to: swapRouterAddress,
+    //   //             value,
+    //   //             data: calldata,
+    //   //           },
+    //   //         ],
+    //   //       ]),
+    //   //       value: '0x0',
+    //   //     },
+    //   //   ]
+    //   // }
+    //   // return [
+    //   //   {
+    //   //     address: swapRouterAddress,
+    //   //     calldata,
+    //   //     value,
+    //   //   },
+    //   // ]
+    // }
   }, [
     account,
-    allowedSlippage,
-    argentWalletContract,
+    // allowedSlippage, // TODO: re-evaluate whether we need this
+    // argentWalletContract,
     chainId,
     deadline,
-    feeOptions,
+    // feeOptions,
     library,
     recipient,
-    routerContract,
-    signatureData,
+    // routerContract,
+    // signatureData,
+    swapRouterAddress,
     trade,
   ])
 }

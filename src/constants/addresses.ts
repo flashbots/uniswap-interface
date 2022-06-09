@@ -115,7 +115,7 @@ export const TICK_LENS_ADDRESSES: AddressMap = {
 
 export const VERIFYING_CONTRACT_EIP712: AddressMap = {
   // TODO: Add mainnet 👀
-  [SupportedChainId.GOERLI]: '0xA1062dC3aB4FF979271bf1FFAd495333550Ac6bB',
+  [SupportedChainId.GOERLI]: '0xc6282cdBb7040F339FA76D370c93833874dAe5Fc',
 }
 
 export const WETH_ADDRESSES: AddressMap = {
