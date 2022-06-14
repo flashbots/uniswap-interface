@@ -5,6 +5,7 @@ import { Currency, Percent, TradeType } from '@uniswap/sdk-core'
 import { Trade as V2Trade } from '@uniswap/v2-sdk'
 import { FeeOptions, Trade as V3Trade } from '@uniswap/v3-sdk'
 import useActiveWeb3React from 'hooks/useActiveWeb3React'
+import { useExecutorNonce } from 'lib/hooks/swap/useExecutorNonce'
 import { SwapMessage } from 'lib/hooks/swap/useSendSwapMessage'
 import { useSwapRouterAddress } from 'lib/hooks/swap/useSwapApproval'
 import { useMemo } from 'react'
@@ -117,9 +118,12 @@ export function useSwapMessageArguments(
   // const routerContract = useV2RouterContract()
   // const argentWalletContract = useArgentWalletContract()
   const swapRouterAddress = useSwapRouterAddress(trade)
+  const nonce = useExecutorNonce(recipientAddress || '')
+  nonce && console.log('NONCE', nonce.toString())
 
   return useMemo(() => {
-    if (!trade || !recipient || !library || !account || !chainId || !deadline || !swapRouterAddress) return []
+    if (!trade || !recipient || !library || !account || !chainId || !deadline || !swapRouterAddress || nonce === null)
+      return []
     const messageParams = swapMessageParameters(trade)
 
     const swap: SwapMessage = {
@@ -132,6 +136,7 @@ export function useSwapMessageArguments(
       deadline: deadline.toNumber(),
       sqrtPriceLimitX96: BigNumber.from(0), // TODO: get real value for this
       fee: 3000, // TODO: get real value for this
+      nonce: BigNumber.from(nonce),
     }
     return [swap]
 
@@ -199,6 +204,7 @@ export function useSwapMessageArguments(
     deadline,
     // feeOptions,
     library,
+    nonce,
     recipient,
     // routerContract,
     // signatureData,

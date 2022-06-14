@@ -23,6 +23,7 @@ export interface SwapMessage {
   deadline: number
   sqrtPriceLimitX96: BigNumber
   fee: number
+  nonce: BigNumber
   // TODO: idea: generalize to support non-uniswap? let order filler decide execution method themselves; don't do it here.
 }
 
@@ -70,6 +71,7 @@ export default function useSendSwapMessage(
               { name: 'deadline', type: 'uint' },
               { name: 'sqrtPriceLimitX96', type: 'uint256' },
               { name: 'fee', type: 'uint256' },
+              { name: 'nonce', type: 'uint256' },
             ],
           },
           domain: {
@@ -89,6 +91,7 @@ export default function useSendSwapMessage(
             deadline: message.deadline.toString(),
             sqrtPriceLimitX96: message.sqrtPriceLimitX96.toString(),
             fee: message.fee.toString(),
+            nonce: message.nonce.toString(),
           },
         }
 
